@@ -46,8 +46,17 @@ func (s *WindowStore) Save(window WindowRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	window.Updated = time.Now().UTC()
+	previous, existed := s.windows[window.PassID]
 	s.windows[window.PassID] = window
-	return s.flushLocked()
+	if err := s.flushLocked(); err != nil {
+		if existed {
+			s.windows[window.PassID] = previous
+		} else {
+			delete(s.windows, window.PassID)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *WindowStore) Get(passID string) (WindowRecord, bool) {

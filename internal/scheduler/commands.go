@@ -46,26 +46,60 @@ func NewCommandQueue(paths store.Paths) (*CommandQueue, error) {
 	return queue, nil
 }
 
+// Replace swaps the active plan for a pass. The in-memory queue is only
+// committed after the snapshot write succeeds, so a failed replace leaves
+// the previous plan fully intact for compensation.
 func (q *CommandQueue) Replace(passID string, revision int64, commands []PointingCommand) error {
 	if passID == "" || revision < 1 || len(commands) == 0 {
 		return fmt.Errorf("pass, revision and pointing commands are required")
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	for index := range q.commands {
-		if q.commands[index].PassID == passID && !q.commands[index].Retired {
-			q.commands[index].Retired = true
-			q.commands[index].RetireCause = fmt.Sprintf("replaced by revision %d", revision)
+	updated := make([]PointingCommand, len(q.commands), len(q.commands)+len(commands))
+	copy(updated, q.commands)
+	for index := range updated {
+		if updated[index].PassID == passID && !updated[index].Retired {
+			updated[index].Retired = true
+			updated[index].RetireCause = fmt.Sprintf("replaced by revision %d", revision)
 		}
 	}
 	for _, command := range commands {
 		command.ID = uuid.NewString()
 		command.PassID = passID
 		command.Revision = revision
-		q.commands = append(q.commands, command)
+		updated = append(updated, command)
 	}
+	if err := store.WriteJSON(q.path, updated); err != nil {
+		return err
+	}
+	q.commands = updated
 	q.active[passID] = revision
-	return store.WriteJSON(q.path, q.commands)
+	return nil
+}
+
+// RetirePass retires every live command of a pass and clears its active
+// revision. It rolls a queued plan back when there is no earlier revision to
+// restore. Like Replace, it commits in memory only after the snapshot write.
+func (q *CommandQueue) RetirePass(passID, cause string) error {
+	if passID == "" || cause == "" {
+		return fmt.Errorf("pass and retire cause are required")
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	updated := make([]PointingCommand, len(q.commands))
+	copy(updated, q.commands)
+	for index := range updated {
+		if updated[index].PassID == passID && !updated[index].Retired {
+			updated[index].Retired = true
+			updated[index].RetireCause = cause
+		}
+	}
+	if err := store.WriteJSON(q.path, updated); err != nil {
+		return err
+	}
+	q.commands = updated
+	delete(q.active, passID)
+	return nil
 }
 
 func (q *CommandQueue) Due(now time.Time) []PointingCommand {

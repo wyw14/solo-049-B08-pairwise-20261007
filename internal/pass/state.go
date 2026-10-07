@@ -192,12 +192,17 @@ func (s *Service) update(passID string, apply func(*Pass) error) error {
 	if !found {
 		return fmt.Errorf("pass %s not found", passID)
 	}
+	previous := value
 	if err := apply(&value); err != nil {
 		return err
 	}
 	value.UpdatedAt = time.Now().UTC()
 	s.passes[passID] = value
-	return s.flushLocked()
+	if err := s.flushLocked(); err != nil {
+		s.passes[passID] = previous
+		return err
+	}
+	return nil
 }
 
 func (s *Service) flushLocked() error {
