@@ -8,14 +8,15 @@ import (
 type Phase string
 
 const (
-	Planned   Phase = "planned"
-	Acquiring Phase = "acquiring"
-	Tracking  Phase = "tracking"
-	Draining  Phase = "draining"
-	Sealed    Phase = "sealed"
-	Completed Phase = "completed"
-	Failed    Phase = "failed"
-	Canceled  Phase = "canceled"
+	Planned      Phase = "planned"
+	Acquiring    Phase = "acquiring"
+	Tracking     Phase = "tracking"
+	Draining     Phase = "draining"
+	Sealed       Phase = "sealed"
+	Completed    Phase = "completed"
+	Failed       Phase = "failed"
+	Canceled     Phase = "canceled"
+	ReplanReview Phase = "replan_review"
 )
 
 type Window struct {
@@ -47,6 +48,8 @@ type Pass struct {
 	OwnerStation           string    `json:"owner_station"`
 	OwnerGeneration        int64     `json:"owner_generation"`
 	FailureReason          string    `json:"failure_reason,omitempty"`
+	ReplanRevision         int64     `json:"replan_revision,omitempty"`
+	ReplanReason           string    `json:"replan_reason,omitempty"`
 	CreatedAt              time.Time `json:"created_at"`
 	UpdatedAt              time.Time `json:"updated_at"`
 }

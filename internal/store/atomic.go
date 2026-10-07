@@ -58,3 +58,30 @@ func ReadJSON(path string, value any) (found bool, err error) {
 	}
 	return true, nil
 }
+
+// RemoveFile deletes path; a missing file is not an error.
+func RemoveFile(path string) error {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove state marker: %w", err)
+	}
+	return nil
+}
+
+// ReadDirNames returns the names of regular files in dir; a missing directory
+// yields no names and no error.
+func ReadDirNames(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read state directory: %w", err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			names = append(names, entry.Name())
+		}
+	}
+	return names, nil
+}

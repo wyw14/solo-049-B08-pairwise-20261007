@@ -37,6 +37,7 @@ func NewRouter(runtime *Runtime) (http.Handler, error) {
 		api.Post("/passes/{passID}/receiver/loss", runtime.loseCarrier)
 		api.Post("/passes/{passID}/receiver/symbols", runtime.feedSymbols)
 		api.Post("/passes/{passID}/finalize", runtime.finalizePass)
+		api.Post("/passes/{passID}/replan-review", runtime.resolveReplanReview)
 		api.Post("/passes/{passID}/cancel", runtime.cancelPass)
 		api.Post("/passes/{passID}/handover", runtime.handoverPass)
 		api.Post("/passes/{passID}/handover/{sessionID}/cleanup", runtime.cleanupHandover)

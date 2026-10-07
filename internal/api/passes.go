@@ -203,6 +203,24 @@ func (r *Runtime) cancelPass(writer http.ResponseWriter, request *http.Request) 
 	writeJSON(writer, http.StatusOK, value)
 }
 
+// resolveReplanReview lets an operator accept the pending revised window or
+// keep the current one after a replan was parked for manual review.
+func (r *Runtime) resolveReplanReview(writer http.ResponseWriter, request *http.Request) {
+	var input struct {
+		Accept bool `json:"accept"`
+	}
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(writer, err)
+		return
+	}
+	value, err := r.Replanner.ResolveReview(chi.URLParam(request, "passID"), input.Accept)
+	if err != nil {
+		writeError(writer, err)
+		return
+	}
+	writeJSON(writer, http.StatusOK, value)
+}
+
 type errMessage string
 
 func (e errMessage) Error() string { return string(e) }

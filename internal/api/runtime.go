@@ -129,6 +129,7 @@ func NewRuntime(stateRoot string) (*Runtime, error) {
 	if err := runtime.seed(); err != nil {
 		return nil, err
 	}
+	replanner.Recover()
 	return runtime, nil
 }
 

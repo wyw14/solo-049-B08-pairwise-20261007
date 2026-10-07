@@ -16,15 +16,15 @@ func NewPaths(root string) Paths {
 }
 
 func (p Paths) Events(stream string) string {
-	return filepath.Join(p.Root, "events", safeName(stream)+".jsonl")
+	return filepath.Join(p.Root, "events", SafeName(stream)+".jsonl")
 }
 
 func (p Paths) Snapshot(component string) string {
-	return filepath.Join(p.Root, "snapshots", safeName(component)+".json")
+	return filepath.Join(p.Root, "snapshots", SafeName(component)+".json")
 }
 
 func (p Paths) Recording(id string) string {
-	return filepath.Join(p.Root, "recordings", safeName(id)+".frames")
+	return filepath.Join(p.Root, "recordings", SafeName(id)+".frames")
 }
 
 func (p Paths) Validate() error {
@@ -34,7 +34,8 @@ func (p Paths) Validate() error {
 	return nil
 }
 
-func safeName(value string) string {
+// SafeName makes an identifier safe to embed in a state file name.
+func SafeName(value string) string {
 	value = strings.TrimSpace(value)
 	value = strings.ReplaceAll(value, "..", "-")
 	value = strings.NewReplacer("/", "-", "\\", "-", ":", "-").Replace(value)

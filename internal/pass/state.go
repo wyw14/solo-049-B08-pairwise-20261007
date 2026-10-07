@@ -117,8 +117,12 @@ func (s *Service) ApplyAcquisitionResult(result receiver.AcquisitionResult) erro
 		value.FailureReason = result.ErrorCode
 	}
 	value.UpdatedAt = time.Now().UTC()
+	previous := s.passes[value.ID]
 	s.passes[value.ID] = value
 	err := s.flushLocked()
+	if err != nil {
+		s.passes[value.ID] = previous
+	}
 	s.mu.Unlock()
 	if err != nil {
 		return err
@@ -174,6 +178,52 @@ func (s *Service) Fail(passID, reason string) error {
 	})
 }
 
+// MarkReplanReview parks a planned pass for operator review after a replan
+// could neither commit nor roll back cleanly. Passes that have already left
+// the planned phase are left untouched.
+func (s *Service) MarkReplanReview(passID string, revision int64, reason string) error {
+	return s.update(passID, func(value *Pass) error {
+		if value.Phase != Planned {
+			return fmt.Errorf("pass %s cannot enter replan review from phase %s", passID, value.Phase)
+		}
+		value.Phase = ReplanReview
+		value.ReplanRevision = revision
+		value.ReplanReason = reason
+		return nil
+	})
+}
+
+// AcceptReviewedWindow resolves a review by adopting the revised window.
+func (s *Service) AcceptReviewedWindow(passID string, window Window) error {
+	return s.update(passID, func(value *Pass) error {
+		if value.Phase != ReplanReview {
+			return fmt.Errorf("pass %s is not awaiting replan review", passID)
+		}
+		if window.Revision != value.ReplanRevision {
+			return fmt.Errorf("reviewed window revision %d does not match pending revision %d", window.Revision, value.ReplanRevision)
+		}
+		value.Window = window
+		value.Phase = Planned
+		value.ReplanRevision = 0
+		value.ReplanReason = ""
+		return nil
+	})
+}
+
+// KeepCurrentWindow resolves a review by staying on the window the pass still
+// holds; reconciliation of the stores must already have restored it.
+func (s *Service) KeepCurrentWindow(passID string) error {
+	return s.update(passID, func(value *Pass) error {
+		if value.Phase != ReplanReview {
+			return fmt.Errorf("pass %s is not awaiting replan review", passID)
+		}
+		value.Phase = Planned
+		value.ReplanRevision = 0
+		value.ReplanReason = ""
+		return nil
+	})
+}
+
 func (s *Service) Cancel(passID, reason string) error {
 	return s.update(passID, func(value *Pass) error {
 		if value.Phase == Completed || value.Phase == Sealed {
@@ -192,12 +242,18 @@ func (s *Service) update(passID string, apply func(*Pass) error) error {
 	if !found {
 		return fmt.Errorf("pass %s not found", passID)
 	}
+	previous := value
 	if err := apply(&value); err != nil {
 		return err
 	}
 	value.UpdatedAt = time.Now().UTC()
 	s.passes[passID] = value
-	return s.flushLocked()
+	if err := s.flushLocked(); err != nil {
+		// Disk still holds the previous snapshot; keep memory consistent.
+		s.passes[passID] = previous
+		return err
+	}
+	return nil
 }
 
 func (s *Service) flushLocked() error {
